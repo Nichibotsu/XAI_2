@@ -3,3 +3,4 @@ torchvision
 requests
 streamlit
 torchcam
+opencv-python

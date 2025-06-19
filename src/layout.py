@@ -13,15 +13,16 @@ _METHODS = ["Grad-CAM", "Saliency Map", "LIME", "Feature Viz"]
 
 def render_main_layout(model_name: str, model_obj):
     st.header(f"Modell: {model_name}")
-    image = update.upload_image()
-     # Button zum Laden des Beispielbildes
-    if st.button("Beispielbild laden"):
+    
+    if st.sidebar.button("Beispielbild laden"):
         image = load_example_image()
-        st.image(image, caption="Beagle Hund (Beispielbild)", use_column_width=True)
-    elif image is None:
+        st.sidebar.image(image, caption="Katze")
+    else:
+        image = update.upload_image()
+
+    if image is None:
         st.info("Bitte lade in der Seitenleiste ein Bild hoch oder benutze den Button zum Laden des Beispielbildes.")
         return
-
 
     tabs = st.tabs(_METHODS)
     for tab, method in zip(tabs, _METHODS):
@@ -32,6 +33,7 @@ def render_main_layout(model_name: str, model_obj):
                 gradcam.show_gradcam(grad_model_obj, image)
             elif method == "Feature Viz":
                 feature_viz.show_feature_maps(model_obj, image, model_name)
+                feature_viz.show_feature_overlay(model_obj,image,model_name)
             else:
                 update.show_placeholder(method)
             
