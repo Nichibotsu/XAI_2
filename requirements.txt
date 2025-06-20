@@ -1,0 +1,6 @@
+torch 
+torchvision
+requests
+streamlit
+torchcam
+opencv-python
