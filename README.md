@@ -19,7 +19,7 @@ Dieses Programm wurde mit der Python-Version 3.11.9 erstellt.
 
 Herrunterladen der Bibliotheken
 ```bash
-pip install -r requirments.txt
+pip install -r requirements.txt
 ```
 
 Starten der App
