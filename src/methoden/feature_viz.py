@@ -41,23 +41,32 @@ def preprocess_image(image):
 
 def show_feature_maps(model, image, model_type='resnet50'):
     register_activation_hook(model, model_type)
-    input_tensor = preprocess_image(image)
+    input_tensor = preprocess_image(image)        
 
-
-    # Kein torch.no_grad() verwenden, damit Hook funktioniert!
-    _ = model(input_tensor)
+    _ = model(input_tensor)                      
 
     if 'features' not in activation:
         st.warning("Keine Features gefunden.")
         return
 
-    act = activation['features'][0]
-    num_channels = min(16, act.shape[0])
-    fig, axes = plt.subplots(4, 4, figsize=(10, 10))
-    for i in range(num_channels):
-        ax = axes[i // 4, i % 4]
-        ax.imshow(act[i].cpu(), cmap='viridis')
+    act = activation['features'][0]             
+    C, H, W = act.shape
+
+    channel_score = act.abs().mean(dim=(1, 2))  
+
+    top_k = min(16, C)
+    top_indices = torch.topk(channel_score, k=top_k, largest=True).indices   
+
+    rows = cols = 4                              # 4 × 4 Raster
+    fig, axes = plt.subplots(rows, cols, figsize=(10, 10))
+
+    for i, ch_idx in enumerate(top_indices):
+        ax = axes[i // cols, i % cols]
+        fmap_np = act[ch_idx].cpu().numpy()
+        ax.imshow(fmap_np, cmap='viridis')
+        ax.set_title(f"ch {ch_idx.item()}")      # Kanalnummer anzeigen
         ax.axis('off')
+
     plt.tight_layout()
     st.pyplot(fig)
 

@@ -1,4 +1,3 @@
-"""Enthält nur noch UI‑Hilfsfunktionen für Upload & Platzhalter."""
 from typing import Optional
 import streamlit as st
 from PIL import Image
