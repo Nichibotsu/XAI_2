@@ -13,7 +13,6 @@ from sklearn.decomposition import PCA
 import uuid
 import pandas as pd
 
-# ── Helper: Collect Activations on GPU/CPU ───────────────────
 
 def _get_layer(model: torch.nn.Module, layer_path: str):
     layer = model
@@ -65,7 +64,6 @@ def _collect_activations(model: torch.nn.Module, images: List[Image.Image], laye
 
     return torch.cat(acts).numpy()
 
-# ── Helper: Dimensionality Reduction with GPU fallback ───────
 
 def _reduce(vecs: np.ndarray, method: str = "umap", dim: int = 2, params: dict = None):
     params = params or {}
@@ -97,7 +95,7 @@ def _reduce(vecs: np.ndarray, method: str = "umap", dim: int = 2, params: dict =
         reducer = PCA(n_components=dim)
         return reducer.fit_transform(vecs32)
 
-# ── Helper: Plotly Visualisierung ─────────────────────────────
+# Visualisierung 
 
 def _plot(emb: np.ndarray, labels: Sequence[str], dim: int):
     df = pd.DataFrame(emb, columns=["x", "y"] + (["z"] if dim == 3 else []))
@@ -105,12 +103,12 @@ def _plot(emb: np.ndarray, labels: Sequence[str], dim: int):
 
     if dim == 3:
         fig = px.scatter_3d(df, x="x", y="y", z="z", color="label", width=700, height=1000)
+        fig.update_traces(marker=dict(size=4, sizemode='diameter', sizeref=1, sizemin=4))
     else:
         fig = px.scatter(df, x="x", y="y", color="label", width=700, height=900)
 
     st.plotly_chart(fig, use_container_width=True, key=f"plot-{uuid.uuid4()}")
 
-# ── Public API ────────────────────────────────────────────────
 
 def show_embedding_projector(
     model: torch.nn.Module,
