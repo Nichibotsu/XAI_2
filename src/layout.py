@@ -16,6 +16,10 @@ def render_main_layout(model_name:str, model_obj):
     prev_choice = st.session_state.get("prev_dataset", None)
     choice = update.dataset_select()
 
+    if st.sidebar.button("Beispielbild laden"):
+        image = load_example_image()
+        st.sidebar.image(image, caption="Katze")
+
     if choice != prev_choice:
         if choice != "None / Einzelbild":
             st.session_state["selected_tab"] = "Embedding Projector"
