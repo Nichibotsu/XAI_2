@@ -2,6 +2,8 @@ import torch
 import matplotlib.pyplot as plt
 import streamlit as st
 import torchvision.transforms as transforms
+import cv2
+import numpy as np
 
 activation = {}
 
@@ -41,58 +43,62 @@ def preprocess_image(image):
 
 def show_feature_maps(model, image, model_type='resnet50'):
     register_activation_hook(model, model_type)
-    input_tensor = preprocess_image(image)        
+    input_tensor = preprocess_image(image)
 
-    _ = model(input_tensor)                      
+    device = next(model.parameters()).device
+    input_tensor = input_tensor.to(device)
+
+    _ = model(input_tensor)
 
     if 'features' not in activation:
         st.warning("Keine Features gefunden.")
         return
 
-    act = activation['features'][0]             
+    act = activation['features'][0]
     C, H, W = act.shape
 
-    channel_score = act.abs().mean(dim=(1, 2))  
+    channel_score = act.abs().mean(dim=(1, 2))
 
     top_k = min(16, C)
-    top_indices = torch.topk(channel_score, k=top_k, largest=True).indices   
+    top_indices = torch.topk(channel_score, k=top_k, largest=True).indices
 
-    rows = cols = 4                              # 4 × 4 Raster
+    rows = cols = 4
     fig, axes = plt.subplots(rows, cols, figsize=(10, 10))
 
     for i, ch_idx in enumerate(top_indices):
         ax = axes[i // cols, i % cols]
         fmap_np = act[ch_idx].cpu().numpy()
         ax.imshow(fmap_np, cmap='viridis')
-        ax.set_title(f"ch {ch_idx.item()}")      # Kanalnummer anzeigen
+        ax.set_title(f"ch {ch_idx.item()}")
         ax.axis('off')
 
     plt.tight_layout()
     st.pyplot(fig)
 
-import cv2
-import numpy as np
 
 def show_feature_overlay(model, image, model_type='resnet50'):
     register_activation_hook(model, model_type)
     input_tensor = preprocess_image(image)
 
-    _ = model(input_tensor)  # Forward-Pass, Hook füllt `activation`
+    device = next(model.parameters()).device
+    input_tensor = input_tensor.to(device)
+
+    _ = model(input_tensor)
 
     if 'features' not in activation:
         st.warning("Keine Features gefunden.")
         return
 
-    act = activation['features'][0]  # [C, H, W]
-    fmap = act.mean(0).cpu().numpy()  # Mittel über alle Kanäle
-    fmap = (fmap - fmap.min()) / (fmap.max() - fmap.min())  # Normieren
-    fmap_resized = cv2.resize(fmap, image.size)  # (width, height)
+    act = activation['features'][0]
+    fmap = act.mean(0).cpu().numpy()
+    fmap = (fmap - fmap.min()) / (fmap.max() - fmap.min())
+    fmap_resized = cv2.resize(fmap, image.size)
 
     heatmap = np.uint8(255 * fmap_resized)
     heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
     heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
 
-    orig_np = np.array(image.convert("RGB"))  # Originalbild als NumPy
+    orig_np = np.array(image.convert("RGB"))
     overlay = cv2.addWeighted(orig_np, 0.6, heatmap, 0.4, 0)
 
     st.image(overlay, caption="Feature Map Overlay")
