@@ -109,6 +109,15 @@ def _plot(emb: np.ndarray, labels: Sequence[str], dim: int):
 
     st.plotly_chart(fig, use_container_width=True, key=f"plot-{uuid.uuid4()}")
 
+def get_possible_layers(model: torch.nn.Module, model_name: str) -> List[str]:
+    if "resnet" in model_name.lower():
+        return ["conv1", "bn1", "layer1", "layer2", "layer3", "layer4", "avgpool", "fc"]
+    elif "vgg" in model_name.lower():
+        return [f"features.{i}" for i in [3, 8, 15, 22, 29]] + ["avgpool", "classifier.0", "classifier.3"]
+    elif "mobilenet" in model_name.lower():
+        return [f"features.{i}" for i in [1, 3, 6, 10, 13, 17]] + ["classifier.0"]
+    else:
+        return []
 
 def show_embedding_projector(
     model: torch.nn.Module,
@@ -122,7 +131,10 @@ def show_embedding_projector(
 
     # Layer-Auswahl
     st.subheader("Layer-Auswahl")
-    possible_layers = ["conv1", "bn1", "layer1", "layer2", "layer3", "layer4", "avgpool", "fc"]
+    possible_layers = get_possible_layers(model, model.__class__.__name__)
+    if not possible_layers:
+        st.error("Layer-Auswahl für dieses Modell nicht definiert.")
+        return
     layer_name = st.selectbox("Layer für Aktivierung", possible_layers, index=5)  # default: layer4
 
     st.info(f"Sammle Aktivierungen aus Layer **{layer_name}** …")

@@ -1,6 +1,10 @@
 from typing import Dict, Callable, Any, List
 import streamlit as st
-from torchvision.models import resnet50, ResNet50_Weights
+from torchvision.models import (
+    resnet50, ResNet50_Weights,
+    vgg16, VGG16_Weights,
+    mobilenet_v2, MobileNet_V2_Weights,
+)
 
 @st.cache_resource(show_spinner="Lade ResNet50 …")
 def load_resnet50():
@@ -10,12 +14,6 @@ def load_resnet50():
     model.eval()
     return model
 
-@st.cache_resource(show_spinner=False)
-def get_imagenet_labels() -> List[str]:
-    try:
-        return ResNet50_Weights.IMAGENET1K_V2.meta["categories"]
-    except Exception:
-        return [f"Klasse {i}" for i in range(1000)]
 
 
 def _not_implemented(name: str) -> Any:
@@ -23,12 +21,27 @@ def _not_implemented(name: str) -> Any:
     return None
 
 
+@st.cache_resource(show_spinner="Lade VGG16 …")
 def load_vgg16():
-    return _not_implemented("VGG16")
+    weights = VGG16_Weights.IMAGENET1K_V1
+    model = vgg16(weights=weights)
+    model.eval()
+    return model
 
 
+@st.cache_resource(show_spinner="Lade MobileNetV2 …")
 def load_mobilenet():
-    return _not_implemented("MobileNet")
+    weights = MobileNet_V2_Weights.IMAGENET1K_V1
+    model = mobilenet_v2(weights=weights)
+    model.eval()
+    return model
+
+@st.cache_resource(show_spinner=False)
+def get_imagenet_labels() -> List[str]:
+    try:
+        return ResNet50_Weights.IMAGENET1K_V2.meta["categories"]
+    except Exception:
+        return [f"Klasse {i}" for i in range(1000)]
 
 
 MODELS: Dict[str, Callable[[], Any]] = {

@@ -24,9 +24,20 @@ def _overlay(base: Image.Image, cam: np.ndarray, alpha: float = 0.4) -> Image.Im
     red_heat = Image.merge("RGBA", (r, Image.new("L", r.size), Image.new("L", r.size), r))
     return Image.blend(base.convert("RGBA"), red_heat, alpha).convert("RGB")
 
-@st.cache_resource(show_spinner="Initialisiere Grad‑CAM …")
-def _get_cam_extractor(_model: torch.nn.Module):
-    return GradCAM(_model, target_layer="layer4")
+def _get_possible_cam_layers(model: torch.nn.Module) -> List[str]:
+    name = model.__class__.__name__.lower()
+    if "resnet" in name:
+        return ["conv1", "layer1", "layer2", "layer3", "layer4"]
+    elif "vgg" in name:
+        return [f"features.{i}" for i in [5, 10, 17, 24, 28]]
+    elif "mobilenet" in name:
+        return [f"features.{i}" for i in [0, 3, 6, 13, 17]]
+    else:
+        return []
+
+def _get_cam_extractor(model: torch.nn.Module, layer: str):
+    return GradCAM(model, target_layer=layer)
+
 
 def _predict(model: torch.nn.Module, tensor: torch.Tensor, labels: List[str]):
     logits = model(tensor)
@@ -52,7 +63,16 @@ def show_gradcam(model: Optional[torch.nn.Module], img: Image.Image):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device).eval()
-    extractor = _get_cam_extractor(model)
+
+    # 👉 Sidebar-Layer-Auswahl
+    st.sidebar.subheader("Grad‑CAM Einstellungen")
+    possible_layers = _get_possible_cam_layers(model)
+    if not possible_layers:
+        st.error("Für dieses Modell sind keine Grad‑CAM Layer definiert.")
+        return
+
+    selected_layer = st.sidebar.selectbox("Target-Layer für Grad‑CAM", possible_layers, index=len(possible_layers)-1)
+    extractor = _get_cam_extractor(model, selected_layer)
 
     tensor = _preprocess(img).to(device)
     labels = get_imagenet_labels()
@@ -66,7 +86,7 @@ def show_gradcam(model: Optional[torch.nn.Module], img: Image.Image):
             st.error(f"Grad‑CAM Fehler: {e}")
             return
 
-    st.success(f"**Vorhersage:** {label}  •  Konfidenz: {prob:.1%}")
+    st.success(f"**Vorhersage:** {label}  •  Konfidenz: {prob:.1%}")
     col1, col2 = st.columns(2)
     col1.image(img, caption="Original", use_container_width=True)
-    col2.image(overlay, caption="Grad‑CAM", use_container_width=True)
+    col2.image(overlay, caption=f"Grad‑CAM ({selected_layer})", use_container_width=True)
