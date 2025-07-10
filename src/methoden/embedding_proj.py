@@ -10,9 +10,9 @@ from cuml.manifold import TSNE as cuTSNE
 from cuml.manifold import UMAP as cuUMAP
 from umap import UMAP
 from sklearn.decomposition import PCA
+from sklearn.metrics import silhouette_score, davies_bouldin_score
 import uuid
 import pandas as pd
-
 
 def _get_layer(model: torch.nn.Module, layer_path: str):
     layer = model
@@ -22,7 +22,6 @@ def _get_layer(model: torch.nn.Module, layer_path: str):
 
 
 def _collect_activations(model: torch.nn.Module, images: List[Image.Image], layer_name: str, device: str = "cuda", batch_size: int = 32) -> np.ndarray:
-    
     device = torch.device(device if torch.cuda.is_available() else "cpu")
     model = model.to(device).eval()
 
@@ -42,7 +41,7 @@ def _collect_activations(model: torch.nn.Module, images: List[Image.Image], laye
     ])
 
     progress = st.progress(0.0, text="Bilder durch Netzwerk …")
-    log_box  = st.empty()  # Text‑Placeholder für Debug‑Info in UI
+    log_box = st.empty()
 
     total = len(images)
     processed = 0
@@ -56,7 +55,7 @@ def _collect_activations(model: torch.nn.Module, images: List[Image.Image], laye
         progress.progress(frac)
         msg = f"Aktivierungen gesammelt: {processed}/{total}"
         log_box.text(msg)
-        print(msg, flush=True)  # Debug in Terminal/Logs
+        print(msg, flush=True)
 
     handle.remove()
     progress.empty()
@@ -64,6 +63,10 @@ def _collect_activations(model: torch.nn.Module, images: List[Image.Image], laye
 
     return torch.cat(acts).numpy()
 
+
+@st.cache_data(show_spinner="Aktivierungen cachen …", hash_funcs={torch.nn.Module: id})
+def cached_collect_activations(_model: torch.nn.Module, model_id: str, layer_name: str, images: List[Image.Image], device: str = "cuda") -> np.ndarray:
+    return _collect_activations(_model, images, layer_name, device=device)
 
 def _reduce(vecs: np.ndarray, method: str = "umap", dim: int = 2, params: dict = None):
     params = params or {}
@@ -91,11 +94,10 @@ def _reduce(vecs: np.ndarray, method: str = "umap", dim: int = 2, params: dict =
         reducer = MDS(n_components=dim, **params)
         return reducer.fit_transform(vecs32)
 
-    else:  # PCA
+    else:
         reducer = PCA(n_components=dim)
         return reducer.fit_transform(vecs32)
 
-# Visualisierung 
 
 def _plot(emb: np.ndarray, labels: Sequence[str], dim: int):
     df = pd.DataFrame(emb, columns=["x", "y"] + (["z"] if dim == 3 else []))
@@ -109,6 +111,17 @@ def _plot(emb: np.ndarray, labels: Sequence[str], dim: int):
 
     st.plotly_chart(fig, use_container_width=True, key=f"plot-{uuid.uuid4()}")
 
+
+def compute_embedding_metrics(emb: np.ndarray, labels: List[str]) -> dict:
+    label_ids = pd.factorize(labels)[0]
+    if len(set(label_ids)) <= 1:
+        return {"silhouette": float('nan'), "davies_bouldin": float('nan')}
+
+    silhouette = silhouette_score(emb, label_ids)
+    db_index = davies_bouldin_score(emb, label_ids)
+    return {"silhouette": silhouette, "davies_bouldin": db_index}
+
+
 def get_possible_layers(model: torch.nn.Module, model_name: str) -> List[str]:
     if "resnet" in model_name.lower():
         return ["conv1", "bn1", "layer1", "layer2", "layer3", "layer4", "avgpool", "fc"]
@@ -118,6 +131,7 @@ def get_possible_layers(model: torch.nn.Module, model_name: str) -> List[str]:
         return [f"features.{i}" for i in [1, 3, 6, 10, 13, 17]] + ["classifier.0"]
     else:
         return []
+
 
 def show_embedding_projector(
     model: torch.nn.Module,
@@ -129,16 +143,16 @@ def show_embedding_projector(
         st.warning("Keine Bilder übergeben.")
         return
 
-    # Layer-Auswahl
     st.subheader("Layer-Auswahl")
     possible_layers = get_possible_layers(model, model.__class__.__name__)
     if not possible_layers:
         st.error("Layer-Auswahl für dieses Modell nicht definiert.")
         return
-    layer_name = st.selectbox("Layer für Aktivierung", possible_layers, index=5)  # default: layer4
+    layer_name = st.selectbox("Layer für Aktivierung", possible_layers, index=5)
+    model_id = model.__class__.__name__
 
     st.info(f"Sammle Aktivierungen aus Layer **{layer_name}** …")
-    vecs = _collect_activations(model, images, layer_name, device=device)
+    vecs = cached_collect_activations(model, model_id, layer_name, images, device=device)
 
     st.subheader("Dimensionale Reduktion")
     method = st.selectbox("Methode", ["umap", "tsne", "pca", "mds"])
@@ -163,3 +177,7 @@ def show_embedding_projector(
     bar.empty()
 
     _plot(emb, labels, dim)
+
+    metrics = compute_embedding_metrics(emb, labels)
+    st.markdown(f"**Silhouette Score:** {metrics['silhouette']:.3f}<br>"
+                f"**Davies-Bouldin Index:** {metrics['davies_bouldin']:.3f}", unsafe_allow_html=True)
