@@ -6,7 +6,6 @@ import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 import plotly.express as px
-import os
 from pathlib import Path
 
 # ----------- Modell laden -----------
@@ -41,15 +40,26 @@ st.title("🐶🐱 CLS-Repräsentationen – Oxford Pets")
 base_dir = st.text_input("📁 Gib den Pfad zu deinem Bilderordner ein", value="data/pets_subset_mini")
 max_imgs = st.slider("🔢 Max. Bilder pro Klasse", 5, 50, 20)
 
-# Zeige Inhalt optional
 if st.checkbox("📂 Zeige Unterordner"):
     try:
         st.write([f.name for f in Path(base_dir).iterdir() if f.is_dir()])
     except:
         st.warning("Pfad ungültig oder nicht gefunden.")
 
-image_paths, labels = load_images_from_folder(base_dir, max_imgs)
+# Auswahl der Hidden States
+selected_layers = st.multiselect(
+    "🧠 Wähle Hidden Layers zur Anzeige (1 = früh, 12 = spät)",
+    options=list(range(1, 13)),
+    default=[12]
+)
 
+# Auswahl der Aggregationsmethode
+aggregation_method = st.radio(
+    "📐 Aggregationsmethode der Layer-Repräsentationen",
+    ["Mittelwert (mean)", "Konkatenation (concat)"]
+)
+
+image_paths, labels = load_images_from_folder(base_dir, max_imgs)
 
 if len(image_paths) == 0:
     st.warning("Keine Bilder gefunden. Stelle sicher, dass dein Pfad korrekt ist.")
@@ -57,17 +67,27 @@ else:
     st.write(f"📸 {len(image_paths)} Bilder aus {len(set(labels))} Klassen geladen.")
 
     cls_vectors = []
-
     progress = st.progress(0)
+
     for i, img_path in enumerate(image_paths):
         image = Image.open(img_path).convert("RGB")
         inputs = processor(images=image, return_tensors="pt")
 
         with torch.no_grad():
-            outputs = model(**inputs)
-            cls = outputs.last_hidden_state[:, 0, :].squeeze().numpy()
+            outputs = model(**inputs, output_hidden_states=True)
+            hidden_states = outputs.hidden_states
 
-        cls_vectors.append(cls)
+            cls_tokens = []
+            for layer_idx in selected_layers:
+                cls_token = hidden_states[layer_idx][:, 0, :].squeeze().numpy()
+                cls_tokens.append(cls_token)
+
+            if aggregation_method == "Mittelwert (mean)":
+                combined_cls = np.mean(cls_tokens, axis=0)
+            else:  # Konkatenation
+                combined_cls = np.concatenate(cls_tokens, axis=0)
+
+        cls_vectors.append(combined_cls)
         progress.progress((i + 1) / len(image_paths))
 
     cls_array = np.stack(cls_vectors)
